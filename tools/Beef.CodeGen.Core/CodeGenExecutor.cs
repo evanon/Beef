@@ -62,6 +62,11 @@ namespace Beef.CodeGen
         /// Gets or sets dictionary of parameter name/value pairs.
         /// </summary>
         public Dictionary<string, string> Parameters { get; private set; } = new Dictionary<string, string>();
+
+        /// <summary>
+        /// Gets or sets if the CodeGenerator is expecting to generate No changes.  E.g. in a build pipeline
+        /// </summary>
+        public bool ExpectNoChange { get; internal set; }
     }
 
     /// <summary>
@@ -88,6 +93,7 @@ namespace Beef.CodeGen
         /// </summary>
         protected override async Task OnRunAsync(ExecutorRunArgs args)
         {
+            int overallCreatedCount = 0, overallUpdatedCount = 0;
             try
             {
                 XElement? xmlScript;
@@ -169,6 +175,10 @@ namespace Beef.CodeGen
 
                     // Provide statistics.
                     Logger.Default.Info("   [Files: Unchanged = {0}, Updated = {1}, Created = {2}]", NotChangedCount, UpdatedCount, CreatedCount);
+
+                    // Keep track of overall counts ( potentially looping over many script elements to generate)
+                    overallCreatedCount += CreatedCount;
+                    overallUpdatedCount += UpdatedCount;
                 }
             }
             catch (CodeGenException gcex)
@@ -176,6 +186,9 @@ namespace Beef.CodeGen
                 Logger.Default.Error(gcex.Message);
                 Logger.Default.Info(string.Empty);
             }
+
+            if (_args.ExpectNoChange && (overallCreatedCount != 0 || overallUpdatedCount != 0))
+                throw new CodeGenException("Unexpected changes detected");
         }
 
         /// <summary>
@@ -238,7 +251,7 @@ namespace Beef.CodeGen
             if (fi.Exists)
             {
                 if (e.IsOutputNewOnly)
-                    return; 
+                    return;
 
                 var prevContent = File.ReadAllText(fi.FullName);
                 if (string.Compare(e.Content, prevContent, StringComparison.InvariantCulture) == 0)

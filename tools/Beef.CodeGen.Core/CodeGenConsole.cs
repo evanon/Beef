@@ -29,6 +29,7 @@ namespace Beef.CodeGen
         private readonly CommandOption _assembliesOpt;
         private readonly List<Assembly> _assemblies = new List<Assembly>();
         private readonly CommandOption _paramsOpt;
+        private readonly CommandOption _expectNoChange;
 
         /// <summary>
         /// Creates a new instance of the <see cref="CodeGenConsole"/>.
@@ -69,6 +70,8 @@ namespace Beef.CodeGen
             _assembliesOpt = App.Option("-a|--assembly", "Assembly name containing scripts (multiple can be specified).", CommandOptionType.MultipleValue)
                 .Accepts(v => v.Use(new AssemblyValidator(_assemblies)));
 
+            _expectNoChange = App.Option("-x|--expectNoChanges", "Expect no changes in the output, exit if changes are detected (for build pipelines).", CommandOptionType.NoValue);
+
             _paramsOpt = App.Option("-p|--param", "Name=Value pair(s) passed into code generation.", CommandOptionType.MultipleValue)
                 .Accepts(v => v.Use(new ParamsValidator()));
 
@@ -81,7 +84,7 @@ namespace Beef.CodeGen
                 return await RunRunAwayAsync().ConfigureAwait(false);
             });
         }
-    
+
         /// <summary>
         /// Gets the underlying <see cref="CommandLineApplication"/>.
         /// </summary>
@@ -139,22 +142,31 @@ namespace Beef.CodeGen
                 ScriptFile = new FileInfo(_scriptOpt.Value()),
                 TemplatePath = _templateOpt.HasValue() ? new DirectoryInfo(_templateOpt.Value()) : null,
                 OutputPath = new DirectoryInfo(_outputOpt.HasValue() ? _outputOpt.Value() : Environment.CurrentDirectory),
+                ExpectNoChange = _expectNoChange.HasValue(),
             };
 
             WriteHeader(args);
 
             using (var em = ExecutionManager.Create(() => new CodeGenExecutor(args)))
             {
+                if (args.ExpectNoChange)
+                {
+                    em.ExceptionHandling = ExceptionHandling.Stop;
+                }
+
                 var sw = Stopwatch.StartNew();
 
                 await em.RunAsync().ConfigureAwait(false);
 
                 sw.Stop();
                 WriteFooter(sw);
+
+                if (em.HadExecutionException)
+                    return -1;
             }
             return 0;
         }
-        
+
         /// <summary>
         /// Set up the <see cref="ExecutionContext"/> including the log to console binding.
         /// </summary>
