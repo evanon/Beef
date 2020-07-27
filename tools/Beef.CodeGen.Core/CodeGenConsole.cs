@@ -2,6 +2,8 @@
 
 using Beef.Diagnostics;
 using Beef.Executors;
+using Beef.Executors.Triggers;
+using Beef.Validation;
 using McMaster.Extensions.CommandLineUtils;
 using McMaster.Extensions.CommandLineUtils.Validation;
 using System;
@@ -70,7 +72,7 @@ namespace Beef.CodeGen
             _assembliesOpt = App.Option("-a|--assembly", "Assembly name containing scripts (multiple can be specified).", CommandOptionType.MultipleValue)
                 .Accepts(v => v.Use(new AssemblyValidator(_assemblies)));
 
-            _expectNoChange = App.Option("-x|--expectNoChanges", "Expect no changes in the output, exit if changes are detected (for build pipelines).", CommandOptionType.NoValue);
+            _expectNoChange = App.Option("--expectNoChanges", "Expect no changes in the output, exit if changes are detected (for build pipelines).", CommandOptionType.NoValue);
 
             _paramsOpt = App.Option("-p|--param", "Name=Value pair(s) passed into code generation.", CommandOptionType.MultipleValue)
                 .Accepts(v => v.Use(new ParamsValidator()));
@@ -161,8 +163,10 @@ namespace Beef.CodeGen
                 sw.Stop();
                 WriteFooter(sw);
 
-                if (em.HadExecutionException)
+                if (args.ExpectNoChange && (em.HadExecutionException || em.LastExecutor?.Result == ExecutorResult.Unsuccessful))
+                {
                     return -1;
+                }
             }
             return 0;
         }
@@ -282,6 +286,7 @@ namespace Beef.CodeGen
 
                 Logger.Default.Info($"  Template = {args.TemplatePath?.FullName}");
                 Logger.Default.Info($"  Output = {args.OutputPath?.FullName}");
+                Logger.Default.Info($"  Expect No Changes = {args.ExpectNoChange}");
             }
 
             Logger.Default.Info($"  Params{(args.Parameters.Count == 0 ? " = none" : ":")}");

@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Avanade. Licensed under the MIT License. See https://github.com/Avanade/Beef
 
+using Beef.Diagnostics;
 using McMaster.Extensions.CommandLineUtils;
 using System;
 using System.Collections.Generic;
@@ -193,6 +194,7 @@ namespace Beef.CodeGen
             var cmd = app.Argument<CommandType>("command", "Execution command type: Entity, Database, RefData or All.", false).IsRequired();
             var cs = app.Option("-c|--connectionString", "Override the connection string for Database.", CommandOptionType.SingleValue);
             var cx = app.Option("-x|--xml", "Override the filename for the configuration XML.", CommandOptionType.SingleValue).Accepts(v => v.ExistingFile());
+            var expectNoChange = app.Option("--expectNoChanges", "Expect no changes in the output, exit if changes are detected (for build pipelines).", CommandOptionType.NoValue);
 
             var entityFileName = EntityFileNameTemplate;
             var databaseFileName = DatabaseFileNameTemplate;
@@ -210,18 +212,19 @@ namespace Beef.CodeGen
                     entityFileName = databaseFileName = refDataFileName = dataModelFileName = cx.Value()!;
                 }
 
+                var expectNoChangeArg = expectNoChange.HasValue() ? " --expectNoChanges" : "";
                 var rc = 0;
                 if (IsDatabaseSupported && ct.HasFlag(CommandType.Database))
-                    rc = await CodeGenConsole.Create().RunAsync(AppendAssemblies(ReplaceMoustache(databaseFileName + " " + DatabaseCommandLineTemplate) + (cs.HasValue() ? $" -p \"ConnectionString={cs.Value()}\"" : ""))).ConfigureAwait(false);
+                    rc = await CodeGenConsole.Create().RunAsync(AppendAssemblies(ReplaceMoustache(databaseFileName + " " + DatabaseCommandLineTemplate) + expectNoChangeArg + (cs.HasValue() ? $" -p \"ConnectionString={cs.Value()}\"" : ""))).ConfigureAwait(false);
 
                 if (rc == 0 && IsRefDataSupported && ct.HasFlag(CommandType.RefData))
-                    rc = await CodeGenConsole.Create().RunAsync(AppendAssemblies(ReplaceMoustache(refDataFileName + " " + RefDataCommandLineTemplate))).ConfigureAwait(false);
+                    rc = await CodeGenConsole.Create().RunAsync(AppendAssemblies(ReplaceMoustache(refDataFileName + " " + RefDataCommandLineTemplate) + expectNoChangeArg)).ConfigureAwait(false);
 
                 if (rc == 0 && IsEntitySupported && ct.HasFlag(CommandType.Entity))
-                    rc = await CodeGenConsole.Create().RunAsync(AppendAssemblies(ReplaceMoustache(entityFileName + " " + EntityCommandLineTemplate))).ConfigureAwait(false);
+                    rc = await CodeGenConsole.Create().RunAsync(AppendAssemblies(ReplaceMoustache(entityFileName + " " + EntityCommandLineTemplate) + expectNoChangeArg)).ConfigureAwait(false);
 
                 if (rc == 0 && IsDataModelSupported && ct.HasFlag(CommandType.DataModel))
-                    rc = await CodeGenConsole.Create().RunAsync(AppendAssemblies(ReplaceMoustache(dataModelFileName + " " + DataModelCommandLineTemplate))).ConfigureAwait(false);
+                    rc = await CodeGenConsole.Create().RunAsync(AppendAssemblies(ReplaceMoustache(dataModelFileName + " " + DataModelCommandLineTemplate) + expectNoChangeArg)).ConfigureAwait(false);
 
                 return rc;
             });
